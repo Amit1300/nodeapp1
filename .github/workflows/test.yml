@@ -47,24 +47,26 @@ jobs:
           echo "== START CREATE REPO"
           echo "== CHECK REPO EXISTS"
           set +e
-          output=`aws ecr describe-repositories --region $aws_region --repository-names $ECR_REPOSITORY 2>&1`
+          output=$(aws ecr describe-repositories --region "$aws_region" --repository-names "$ECR_REPOSITORY" 2>&1)
           exit_code=$?
+          set -e
+
           if [ $exit_code -ne 0 ]; then
-            if echo $output | grep -q RepositoryNotFoundException; then
+            if echo "$output" | grep -q RepositoryNotFoundException; then
               echo "== REPO DOESN'T EXIST, CREATING.."
-              aws ecr create-repository --region $aws_region --repository-name $ECR_REPOSITORY --image-scanning-configuration scanOnPush=true
+              aws ecr create-repository \
+                --region "$aws_region" \
+                --repository-name "$ECR_REPOSITORY" \
+                --image-scanning-configuration scanOnPush=true
               echo "== FINISHED CREATE REPO"
             else
-              >&2 echo $output
+              echo "❌ Unexpected error while checking ECR:"
+              echo "$output"
+              exit 1
             fi
           else
-            echo "== REPO EXISTS, SKIPPING CREATION.."
+            echo "✅ ECR repository '$ECR_REPOSITORY' already exists."
           fi
-          set -e
-            else
-              echo "✅ ECR repository '$ECR_REPOSITORY' already exists."
-            fi
-        
 
       - name: Login to Docker Hub
         uses: docker/login-action@v1
@@ -78,16 +80,21 @@ jobs:
 
       - name: Build Docker image
         run: |
-          output=$(aws ecr list-images --region ap-south-1 --repository-name $ECR_REPOSITORY  | grep latest | tr -d '" ,' | cut -d ':' -f 2)
-          echo $output
-          if [[ "$output" == "latest" ]]
-          then
-             docker pull $ECR_REPO_URL/$ECR_REPOSITORY:latest
-             docker build --cache-from $ECR_REPO_URL/$ECR_REPOSITORY:latest -t $ECR_REPO_URL/$ECR_REPOSITORY:$IMAGE_TAG -f Dockerfile .
+          echo "Checking if 'latest' image exists in ECR..."
+          output=$(aws ecr list-images --region "$aws_region" --repository-name "$ECR_REPOSITORY" | grep latest | tr -d '" ,' | cut -d ':' -f 2)
+          echo "Found: $output"
+
+          if [[ "$output" == "latest" ]]; then
+            echo "Pulling latest image for cache..."
+            docker pull $ECR_REPO_URL/$ECR_REPOSITORY:latest
+            docker build \
+              --cache-from $ECR_REPO_URL/$ECR_REPOSITORY:latest \
+              -t $ECR_REPO_URL/$ECR_REPOSITORY:$IMAGE_TAG \
+              -f Dockerfile .
           else
-             docker build -t $ECR_REPO_URL/$ECR_REPOSITORY:$IMAGE_TAG -f Dockerfile .
-          fi 
-          
+            echo "No latest image found. Building without cache..."
+            docker build -t $ECR_REPO_URL/$ECR_REPOSITORY:$IMAGE_TAG -f Dockerfile .
+          fi
 
       - name: Push Docker image to ECR
         env:
