@@ -33,7 +33,7 @@ jobs:
           aws_region: ${{ secrets.DEV_AWS_Region }}
           ECR_REPOSITORY: ${{ github.event.repository.name }}
         run: |
-          output=$(aws ecr describe-repositories --region $aws_region --repository-names $ECR_REPOSITORY 2>&1)
+          output=$(aws ecr describe-repositories --region ap-south-1 --repository-names $ECR_REPOSITORY 2>&1)
           if [ $? -ne 0 ]; then
             if echo "${output}" | grep -q RepositoryNotFoundException; then
               aws ecr create-repository --repository-name $ECR_REPOSITORY --region $aws_region
