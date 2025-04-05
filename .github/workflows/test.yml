@@ -53,7 +53,6 @@ jobs:
             if echo $output | grep -q RepositoryNotFoundException; then
               echo "== REPO DOESN'T EXIST, CREATING.."
               aws ecr create-repository --region $aws_region --repository-name $ECR_REPOSITORY --image-scanning-configuration scanOnPush=true
-              aws ecr put-lifecycle-policy --repository-name $ECR_REPOSITORY --lifecycle-policy-text "{ \"rules\":[ { \"rulePriority\":1, \"description\":\"removed untagged images\", \"selection\":{ \"tagStatus\":\"untagged\", \"countType\":\"imageCountMoreThan\", \"countNumber\":1 }, \"action\":{ \"type\":\"expire\" } }, { \"action\":{ \"type\":\"expire\" }, \"selection\":{ \"countType\":\"imageCountMoreThan\", \"countNumber\":5, \"tagStatus\":\"tagged\", \"tagPrefixList\":[ \"pr\" ] }, \"description\":\"pr images removal\", \"rulePriority\":2 }, { \"action\":{ \"type\":\"expire\" }, \"selection\":{ \"countType\":\"imageCountMoreThan\", \"countNumber\":10, \"tagStatus\":\"tagged\", \"tagPrefixList\":[ \"dev\" ] }, \"description\":\"dev tagged images\", \"rulePriority\":3 }, { \"action\":{ \"type\":\"expire\" }, \"selection\":{ \"countType\":\"imageCountMoreThan\", \"countNumber\":10, \"tagStatus\":\"tagged\", \"tagPrefixList\":[ \"lambda\" ] }, \"description\":\"lambda tagged images\", \"rulePriority\":4 } ] }" --region $aws_region
               echo "== FINISHED CREATE REPO"
             else
               >&2 echo $output
