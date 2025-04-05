@@ -44,25 +44,24 @@ jobs:
           aws_region: ${{ secrets.DEV_AWS_Region }}
           ECR_REPOSITORY: ${{ github.event.repository.name }}
         run: |
-            echo "Checking ECR repository '$ECR_REPOSITORY' in region '$aws_region'..."
-            output=$(aws ecr describe-repositories \
-              --region "$aws_region" \
-              --repository-names "$ECR_REPOSITORY" 2>&1)
-        
-            exit_code=$?
-        
-            if [ $exit_code -ne 0 ]; then
-              if echo "$output" | grep -q "RepositoryNotFoundException"; then
-                echo "Repository not found. Creating '$ECR_REPOSITORY'..."
-                aws ecr create-repository \
-                  --repository-name "$ECR_REPOSITORY" \
-                  --region "$aws_region"
-                echo "✅ Repository created."
-              else
-                echo "❌ Unexpected error while describing repository:"
-                echo "$output"
-                exit 1
-              fi
+          echo "== START CREATE REPO"
+          echo "== CHECK REPO EXISTS"
+          set +e
+          output=`aws ecr describe-repositories --region $aws_region --repository-names $ECR_REPOSITORY 2>&1`
+          exit_code=$?
+          if [ $exit_code -ne 0 ]; then
+            if echo $output | grep -q RepositoryNotFoundException; then
+              echo "== REPO DOESN'T EXIST, CREATING.."
+              aws ecr create-repository --region $aws_region --repository-name $ECR_REPOSITORY --image-scanning-configuration scanOnPush=true
+              aws ecr put-lifecycle-policy --repository-name $ECR_REPOSITORY --lifecycle-policy-text "{ \"rules\":[ { \"rulePriority\":1, \"description\":\"removed untagged images\", \"selection\":{ \"tagStatus\":\"untagged\", \"countType\":\"imageCountMoreThan\", \"countNumber\":1 }, \"action\":{ \"type\":\"expire\" } }, { \"action\":{ \"type\":\"expire\" }, \"selection\":{ \"countType\":\"imageCountMoreThan\", \"countNumber\":5, \"tagStatus\":\"tagged\", \"tagPrefixList\":[ \"pr\" ] }, \"description\":\"pr images removal\", \"rulePriority\":2 }, { \"action\":{ \"type\":\"expire\" }, \"selection\":{ \"countType\":\"imageCountMoreThan\", \"countNumber\":10, \"tagStatus\":\"tagged\", \"tagPrefixList\":[ \"dev\" ] }, \"description\":\"dev tagged images\", \"rulePriority\":3 }, { \"action\":{ \"type\":\"expire\" }, \"selection\":{ \"countType\":\"imageCountMoreThan\", \"countNumber\":10, \"tagStatus\":\"tagged\", \"tagPrefixList\":[ \"lambda\" ] }, \"description\":\"lambda tagged images\", \"rulePriority\":4 } ] }" --region $aws_region
+              echo "== FINISHED CREATE REPO"
+            else
+              >&2 echo $output
+            fi
+          else
+            echo "== REPO EXISTS, SKIPPING CREATION.."
+          fi
+          set -e
             else
               echo "✅ ECR repository '$ECR_REPOSITORY' already exists."
             fi
